@@ -26,6 +26,7 @@ INSERT INTO settings (key, value) SELECT '$key','$value' WHERE NOT EXISTS (SELEC
 if [ -f "$DB" ]; then
     echo "🔧 Configuring subscription service (internal: 127.0.0.1:2097)..."
     set_sub_setting subEnable     true
+    set_sub_setting subJsonEnable true
     set_sub_setting subListen     127.0.0.1
     set_sub_setting subPort       2097
     set_sub_setting subPath       /sub/
