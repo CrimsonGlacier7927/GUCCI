@@ -2,30 +2,45 @@ worker_processes 1;
 events { worker_connections 1024; }
 
 http {
+    # ارتقای اتصال WebSocket
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        ''      close;
+    }
+
+    tcp_nodelay on;
+
+    # ================= سرور اصلی (پورت 3000 = پورت Railway) =================
     server {
         listen ${NGINX_PORT};
 
-        # ریشه دامنه (فقط /): صفحه کاملاً سیاه - پنل نمایش داده نمی‌شود
+        # ریشه دامنه -> صفحه کاملاً سیاه (پنل مخفی می‌ماند)
         location = / {
             default_type text/html;
             return 200 '<!DOCTYPE html><html><head><title></title></head><body style="margin:0;padding:0;background:#000000;width:100vw;height:100vh;"></body></html>';
         }
 
-        # مسیر پنل وب (فوروارد به پورت داخلی 2053 که x-ui روش گوش می‌ده) - فقط با /gucci/ باز می‌شود
+        # /gucci بدون اسلش -> ریدایرکت به /gucci/
+        location = /gucci {
+            return 301 /gucci/;
+        }
+
+        # پنل 3x-ui -> پورت داخلی 1 (فقط با مسیر /gucci/ باز می‌شود)
         location /gucci/ {
-            proxy_pass http://127.0.0.1:2053/gucci/;
+            proxy_pass http://127.0.0.1:1/gucci/;
             proxy_http_version 1.1;
+            proxy_buffering off;
             proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
+            proxy_set_header Connection $connection_upgrade;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
         }
 
-        # مسیر Subscription (ساب لینک) - فوروارد به پورت داخلی 2096
+        # سابسکریپشن (سرویس ساب روی پورت داخلی 2097)
         location /sub/ {
-            proxy_pass http://127.0.0.1:2096/sub/;
+            proxy_pass http://127.0.0.1:2097/sub/;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
@@ -33,79 +48,337 @@ http {
             proxy_set_header X-Forwarded-Proto $scheme;
         }
 
-        # هر مسیر دیگه (اینباند VLESS/WebSocket) به پورت داخلی 8080
+        # ساب JSON
+        location /json/ {
+            proxy_pass http://127.0.0.1:2097/json/;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # ساب Clash
+        location /clash/ {
+            proxy_pass http://127.0.0.1:2097/clash/;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند اصلی VLESS/WebSocket -> پورت داخلی 8080
         location / {
             proxy_pass http://127.0.0.1:8080;
             proxy_http_version 1.1;
+            proxy_buffering off;
             proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
+            proxy_set_header Connection $connection_upgrade;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
         }
-location /in1 {
-    proxy_pass http://127.0.0.1:8081;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-}
-location /in2 {
-    proxy_pass http://127.0.0.1:8082;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-}
-location /in3 {
-    proxy_pass http://127.0.0.1:8083;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-}
-location /in4 {
-    proxy_pass http://127.0.0.1:8084;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-}
-location /in5 {
-    proxy_pass http://127.0.0.1:8085;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-}
-location /in6 {
-    proxy_pass http://127.0.0.1:8086;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-}
-location /in7 {
-    proxy_pass http://127.0.0.1:8087;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-}
-location /in8 {
-    proxy_pass http://127.0.0.1:8088;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-}
-location /in9 {
-    proxy_pass http://127.0.0.1:8089;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-}
+
+        # اینباند 1 -> پورت داخلی 8081
+        location /in1 {
+            proxy_pass http://127.0.0.1:8081;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند 2 -> پورت داخلی 8082
+        location /in2 {
+            proxy_pass http://127.0.0.1:8082;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند 3 -> پورت داخلی 8083
+        location /in3 {
+            proxy_pass http://127.0.0.1:8083;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند 4 -> پورت داخلی 8084
+        location /in4 {
+            proxy_pass http://127.0.0.1:8084;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند 5 -> پورت داخلی 8085
+        location /in5 {
+            proxy_pass http://127.0.0.1:8085;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند 6 -> پورت داخلی 8086
+        location /in6 {
+            proxy_pass http://127.0.0.1:8086;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند 7 -> پورت داخلی 8087
+        location /in7 {
+            proxy_pass http://127.0.0.1:8087;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند 8 -> پورت داخلی 8088
+        location /in8 {
+            proxy_pass http://127.0.0.1:8088;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند 9 -> پورت داخلی 8089
+        location /in9 {
+            proxy_pass http://127.0.0.1:8089;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند 10 -> پورت داخلی 8090
+        location /in10 {
+            proxy_pass http://127.0.0.1:8090;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند 11 -> پورت داخلی 8091
+        location /in11 {
+            proxy_pass http://127.0.0.1:8091;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند 12 -> پورت داخلی 8092
+        location /in12 {
+            proxy_pass http://127.0.0.1:8092;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند 13 -> پورت داخلی 8093
+        location /in13 {
+            proxy_pass http://127.0.0.1:8093;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند 14 -> پورت داخلی 8094
+        location /in14 {
+            proxy_pass http://127.0.0.1:8094;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند 15 -> پورت داخلی 8095
+        location /in15 {
+            proxy_pass http://127.0.0.1:8095;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند 16 -> پورت داخلی 8096
+        location /in16 {
+            proxy_pass http://127.0.0.1:8096;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند 17 -> پورت داخلی 8097
+        location /in17 {
+            proxy_pass http://127.0.0.1:8097;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند 18 -> پورت داخلی 8098
+        location /in18 {
+            proxy_pass http://127.0.0.1:8098;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند 19 -> پورت داخلی 8099
+        location /in19 {
+            proxy_pass http://127.0.0.1:8099;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # اینباند 20 -> پورت داخلی 8100
+        location /in20 {
+            proxy_pass http://127.0.0.1:8100;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+
+    # ================= سرور دوم: پورت 2096 =================
+    # لینک ساب دقیقاً به فرمت https://دامنه:2096/sub/... در دسترس باشد
+    # (روی Railway پورت عمومی فقط 443 است، اما روی VPS/هاست با پورت باز 2096 این مسیر مستقیم هم کار می‌کند)
+    server {
+        listen 2096;
+
+        location /sub/ {
+            proxy_pass http://127.0.0.1:2097/sub/;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        location /json/ {
+            proxy_pass http://127.0.0.1:2097/json/;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        location /clash/ {
+            proxy_pass http://127.0.0.1:2097/clash/;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # هر چیز دیگر روی 2096 -> صفحه سیاه
+        location / {
+            default_type text/html;
+            return 200 '<!DOCTYPE html><html><head><title></title></head><body style="margin:0;padding:0;background:#000000;width:100vw;height:100vh;"></body></html>';
+        }
     }
 }
