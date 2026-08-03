@@ -55,7 +55,7 @@ X_UI_PID=$!
 sleep 3
 
 echo "▶️  Pre-flight checks..."
-curl -s -o /dev/null -w "  panel via nginx  http://127.0.0.1:1/gucci/ -> HTTP %{http_code}\n" http://127.0.0.1:1/gucci/ || echo "  panel not ready yet"
+curl -s -o /dev/null -w "  panel (x-ui)     http://127.0.0.1:2053/gucci/ -> HTTP %{http_code}\n" http://127.0.0.1:2053/gucci/ || echo "  panel not ready yet"
 curl -s -o /dev/null -w "  sub server       http://127.0.0.1:2096/sub/x -> HTTP %{http_code}\n" "http://127.0.0.1:2096/sub/x" || echo "  sub server not ready yet"
 
 echo "▶️  Starting nginx in foreground on port 1..."
