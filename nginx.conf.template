@@ -5,9 +5,15 @@ http {
     server {
         listen ${NGINX_PORT};
 
-        # مسیر پنل وب (فوروارد به پورت داخلی 2053 که x-ui روش گوش می‌ده)
-        location /managepanel/ {
-            proxy_pass http://127.0.0.1:2053/managepanel/;
+        # ریشه دامنه (فقط /): صفحه کاملاً سیاه - پنل نمایش داده نمی‌شود
+        location = / {
+            default_type text/html;
+            return 200 '<!DOCTYPE html><html><head><title></title></head><body style="margin:0;padding:0;background:#000000;width:100vw;height:100vh;"></body></html>';
+        }
+
+        # مسیر پنل وب (فوروارد به پورت داخلی 2053 که x-ui روش گوش می‌ده) - فقط با /gucci/ باز می‌شود
+        location /gucci/ {
+            proxy_pass http://127.0.0.1:2053/gucci/;
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection "upgrade";
