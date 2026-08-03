@@ -21,18 +21,18 @@ INSERT INTO settings (key, value) SELECT '$key','$value' WHERE NOT EXISTS (SELEC
 }
 
 if [ -f "$DB" ]; then
-    echo "🔧 Configuring subscription service (internal port 2096)..."
+    echo "🔧 Configuring subscription service (internal 127.0.0.1:443, HTTP)..."
     set_sub_setting subEnable     true
     set_sub_setting subJsonEnable false
-    set_sub_setting subListen     ""
-    set_sub_setting subPort       2096
+    set_sub_setting subListen     127.0.0.1
+    set_sub_setting subPort       443
     set_sub_setting subPath       /sub/
     set_sub_setting subJsonPath   /json/
     set_sub_setting subClashPath  /clash/
 
     # مسیرهای cert به‌صورت «نشانگر TLS» ست می‌شوند تا 3x-ui لینک‌ها را با https:// و
-    # با پورت 2096 بسازد:  https://{دامنه‌ی پنل}:2096/sub/...
-    # (فایل‌ها وجود ندارند؛ سرویس ساب خودش به HTTP برمی‌گردد)
+    # بدون پورت بسازد:  https://{دامنه‌ی پنل}/sub/...
+    # (فایل‌ها وجود ندارند؛ سرویس ساب خودش به HTTP روی 127.0.0.1:443 برمی‌گردد)
     set_sub_setting subCertFile   /etc/x-ui/sub-dummy-cert.pem
     set_sub_setting subKeyFile    /etc/x-ui/sub-dummy-key.pem
 
@@ -56,7 +56,7 @@ sleep 3
 
 echo "▶️  Pre-flight checks..."
 curl -s -o /dev/null -w "  panel (x-ui)     http://127.0.0.1:2053/gucci/ -> HTTP %{http_code}\n" http://127.0.0.1:2053/gucci/ || echo "  panel not ready yet"
-curl -s -o /dev/null -w "  sub server       http://127.0.0.1:2096/sub/x -> HTTP %{http_code}\n" "http://127.0.0.1:2096/sub/x" || echo "  sub server not ready yet"
+curl -s -o /dev/null -w "  sub server       http://127.0.0.1:443/sub/x  -> HTTP %{http_code}\n" "http://127.0.0.1:443/sub/x" || echo "  sub server not ready yet"
 
 echo "▶️  Starting nginx in foreground on port 1..."
 nginx -t

@@ -30,6 +30,12 @@ http {
             return 200 '<!DOCTYPE html><html><head><title></title></head><body style="margin:0;padding:0;background:#000000;width:100vw;height:100vh;"></body></html>';
         }
 
+        # /sub بدون اسلش -> صفحه سیاه (لینک خراب/ناقص)
+        location = /sub {
+            default_type text/html;
+            return 200 '<!DOCTYPE html><html><head><title></title></head><body style="margin:0;padding:0;background:#000000;width:100vw;height:100vh;"></body></html>';
+        }
+
         # /gucci بدون اسلش -> ریدایرکت به /gucci/
         location = /gucci {
             return 301 /gucci/;
@@ -48,20 +54,29 @@ http {
             proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
-        # سابسکریپشن (سرویس ساب روی پورت داخلی 2096)
-        # این مسیر روی 443 هم کار می‌کند تا لینک ساب همیشه قابل استفاده باشد
+        # سابسکریپشن (سرویس ساب روی پورت داخلی 443)
+        # لینک اصلی: https://{دامنه‌ی پنل}/sub/{subId}
+        # اگر subId اشتباه/کم و زیاد شود -> پاسخ خطای ساب گرفته و صفحه سیاه نشان داده می‌شود
         location /sub/ {
-            proxy_pass http://127.0.0.1:2096/sub/;
+            proxy_pass http://127.0.0.1:443/sub/;
             proxy_http_version 1.1;
+            proxy_intercept_errors on;
+            error_page 400 404 502 503 504 @subblack;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
+        # صفحه سیاه برای لینک ساب اشتباه/ناقص
+        location @subblack {
+            default_type text/html;
+            return 200 '<!DOCTYPE html><html><head><title></title></head><body style="margin:0;padding:0;background:#000000;width:100vw;height:100vh;"></body></html>';
+        }
+
         # ساب Clash
         location /clash/ {
-            proxy_pass http://127.0.0.1:2096/clash/;
+            proxy_pass http://127.0.0.1:443/clash/;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
