@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Starting X-UI + nginx reverse proxy (panel on port 1)..."
+echo "🚀 Starting X-UI + nginx reverse proxy (nginx owns port 1, panel on 2053)..."
 
 # nginx همیشه روی پورت ثابت 3000 گوش می‌دهد
 export NGINX_PORT=3000
@@ -9,7 +9,7 @@ export NGINX_PORT=3000
 cd /usr/local/x-ui
 
 echo "🔧 Applying panel settings via x-ui CLI (panel port = 1, base path = /gucci/)..."
-./x-ui setting -port 1 -webBasePath /gucci/ || true
+./x-ui setting -port 2053 -webBasePath /gucci/ || true
 
 DB=/etc/x-ui/x-ui.db
 
@@ -57,7 +57,7 @@ X_UI_PID=$!
 sleep 3
 
 echo "▶️  Pre-flight checks..."
-curl -s -o /dev/null -w "  panel direct  http://127.0.0.1:1/gucci/  -> HTTP %{http_code}\n" http://127.0.0.1:1/gucci/ || echo "  panel not ready yet (nginx will retry)"
+curl -s -o /dev/null -w "  panel direct  http://127.0.0.1:2053/gucci/ -> HTTP %{http_code}\n" http://127.0.0.1:2053/gucci/ || echo "  panel not ready yet (nginx will retry)"
 curl -s -o /dev/null -w "  sub server   http://127.0.0.1:443/sub/x -> HTTP %{http_code}\n" "http://127.0.0.1:443/sub/x" || echo "  sub server not ready yet (nginx will retry)"
 
 echo "▶️  Starting nginx in foreground on port $NGINX_PORT (+ sub port 2096)..."
