@@ -8,6 +8,13 @@ http {
         ''      close;
     }
 
+    # پروتکل واقعی: اگر Railway (یا پروکسی جلویی) هدر X-Forwarded-Proto را فرستاده
+    # (مثلاً https) آن را حفظ کن، وگرنه از scheme اتصال استفاده کن
+    map $http_x_forwarded_proto $real_scheme {
+        default $http_x_forwarded_proto;
+        ''      $scheme;
+    }
+
     tcp_nodelay on;
 
     # ================= سرور اصلی (پورت 3000 = پورت Railway) =================
@@ -37,37 +44,37 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # سابسکریپشن (سرویس ساب روی پورت داخلی 2097)
         location /sub/ {
-            proxy_pass http://127.0.0.1:2097/sub/;
+            proxy_pass http://127.0.0.1:443/sub/;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # ساب JSON
         location /json/ {
-            proxy_pass http://127.0.0.1:2097/json/;
+            proxy_pass http://127.0.0.1:443/json/;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # ساب Clash
         location /clash/ {
-            proxy_pass http://127.0.0.1:2097/clash/;
+            proxy_pass http://127.0.0.1:443/clash/;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند اصلی VLESS/WebSocket -> پورت داخلی 8080
@@ -80,7 +87,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 1 -> پورت داخلی 8081
@@ -93,7 +100,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 2 -> پورت داخلی 8082
@@ -106,7 +113,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 3 -> پورت داخلی 8083
@@ -119,7 +126,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 4 -> پورت داخلی 8084
@@ -132,7 +139,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 5 -> پورت داخلی 8085
@@ -145,7 +152,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 6 -> پورت داخلی 8086
@@ -158,7 +165,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 7 -> پورت داخلی 8087
@@ -171,7 +178,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 8 -> پورت داخلی 8088
@@ -184,7 +191,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 9 -> پورت داخلی 8089
@@ -197,7 +204,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 10 -> پورت داخلی 8090
@@ -210,7 +217,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 11 -> پورت داخلی 8091
@@ -223,7 +230,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 12 -> پورت داخلی 8092
@@ -236,7 +243,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 13 -> پورت داخلی 8093
@@ -249,7 +256,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 14 -> پورت داخلی 8094
@@ -262,7 +269,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 15 -> پورت داخلی 8095
@@ -275,7 +282,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 16 -> پورت داخلی 8096
@@ -288,7 +295,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 17 -> پورت داخلی 8097
@@ -301,7 +308,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 18 -> پورت داخلی 8098
@@ -314,7 +321,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 19 -> پورت داخلی 8099
@@ -327,7 +334,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # اینباند 20 -> پورت داخلی 8100
@@ -340,7 +347,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
     }
 
@@ -351,30 +358,30 @@ http {
         listen 2096;
 
         location /sub/ {
-            proxy_pass http://127.0.0.1:2097/sub/;
+            proxy_pass http://127.0.0.1:443/sub/;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         location /json/ {
-            proxy_pass http://127.0.0.1:2097/json/;
+            proxy_pass http://127.0.0.1:443/json/;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         location /clash/ {
-            proxy_pass http://127.0.0.1:2097/clash/;
+            proxy_pass http://127.0.0.1:443/clash/;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $real_scheme;
         }
 
         # هر چیز دیگر روی 2096 -> صفحه سیاه

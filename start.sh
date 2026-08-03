@@ -24,28 +24,25 @@ INSERT INTO settings (key, value) SELECT '$key','$value' WHERE NOT EXISTS (SELEC
 }
 
 if [ -f "$DB" ]; then
-    echo "🔧 Configuring subscription service (internal: 127.0.0.1:2097)..."
+    echo "🔧 Configuring subscription service (internal: 127.0.0.1:443, HTTP)..."
     set_sub_setting subEnable     true
     set_sub_setting subJsonEnable true
     set_sub_setting subListen     127.0.0.1
-    set_sub_setting subPort       2097
+    set_sub_setting subPort       443
     set_sub_setting subPath       /sub/
     set_sub_setting subJsonPath   /json/
     set_sub_setting subClashPath  /clash/
 
-    # لینک‌های ساب داخل پنل را خودکار با دامنه Railway می‌سازیم
-    DOMAIN="${RAILWAY_PUBLIC_DOMAIN:-}"
-    if [ -z "$DOMAIN" ]; then
-        DOMAIN="${RAILWAY_TCP_PROXY_DOMAIN:-}"
-    fi
-    if [ -n "$DOMAIN" ]; then
-        echo "🔧 Setting subscription base URL to https://${DOMAIN}/ ..."
-        set_sub_setting subURI      "https://${DOMAIN}/sub/"
-        set_sub_setting subJsonURI  "https://${DOMAIN}/json/"
-        set_sub_setting subClashURI "https://${DOMAIN}/clash/"
-    else
-        echo "⚠️  RAILWAY_PUBLIC_DOMAIN not set - panel will show auto-generated sub links"
-    fi
+    # مسیرهای cert به‌صورت «نشانگر TLS» ست می‌شوند تا 3x-ui لینک‌ها را با https:// بسازد.
+    # (فایل‌ها وجود ندارند؛ سرویس ساب خودش به HTTP روی 127.0.0.1:443 برمی‌گردد)
+    set_sub_setting subCertFile   /etc/x-ui/sub-dummy-cert.pem
+    set_sub_setting subKeyFile    /etc/x-ui/sub-dummy-key.pem
+
+    # سه لینک ساب را خالی می‌گذاریم تا 3x-ui آن‌ها را به‌صورت داینامیک با همان دامنه‌ای که
+    # پنل با آن باز شده بسازد:  https://{دامنه‌ی پنل}/sub/...  (برای هر دامنه‌ای کار می‌کند)
+    set_sub_setting subURI        ""
+    set_sub_setting subJsonURI    ""
+    set_sub_setting subClashURI   ""
 else
     echo "⚠️  DB not found at $DB (x-ui will create it) - skipping sub settings"
 fi
@@ -61,7 +58,7 @@ sleep 3
 
 echo "▶️  Pre-flight checks..."
 curl -s -o /dev/null -w "  panel direct  http://127.0.0.1:1/gucci/  -> HTTP %{http_code}\n" http://127.0.0.1:1/gucci/ || echo "  panel not ready yet (nginx will retry)"
-curl -s -o /dev/null -w "  sub server   http://127.0.0.1:2097/sub/x -> HTTP %{http_code}\n" "http://127.0.0.1:2097/sub/x" || echo "  sub server not ready yet (nginx will retry)"
+curl -s -o /dev/null -w "  sub server   http://127.0.0.1:443/sub/x -> HTTP %{http_code}\n" "http://127.0.0.1:443/sub/x" || echo "  sub server not ready yet (nginx will retry)"
 
 echo "▶️  Starting nginx in foreground on port $NGINX_PORT (+ sub port 2096)..."
 nginx -t
