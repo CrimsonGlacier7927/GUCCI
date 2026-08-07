@@ -15,5 +15,8 @@ COPY nginx.conf.template /etc/nginx/nginx.conf.template
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
+# entrypoint پیش‌فرض تصویر پایه (که فقط ./sui را اجرا می‌کند) باطل می‌شود
+ENTRYPOINT []
+
 # Railway پورت رو از طریق متغیر $PORT تزریق می‌کند؛ nginx روی پورت 1 گوش می‌دهد
 CMD ["/start.sh"]
