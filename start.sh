@@ -2,7 +2,7 @@
 set -e
 
 # =====================================================================
-#  GUCCI v2 — 3x-ui + nginx reverse proxy روی Railway
+#  GUCCI (s-ui edition) — s-ui + nginx reverse proxy روی Railway
 #
 #  متغیرهای محیطی قابل تنظیم (در Railway → Service → Variables):
 #    INBOUND_COUNT     تعداد اینباندهای اضافه /in1..inN   (پیش‌فرض: 50)
@@ -17,21 +17,41 @@ INBOUND_BASE_PORT="${INBOUND_BASE_PORT:-8080}"
 TCP_INBOUND_PORT="${TCP_INBOUND_PORT:-9090}"
 HOST_ROUTES="${HOST_ROUTES:-}"
 
-echo "🚀 Starting X-UI + nginx reverse proxy (GUCCI v2)..."
+echo "🚀 Starting s-ui + nginx reverse proxy (GUCCI s-ui edition)..."
 echo "   inbound paths  : /in1..in$INBOUND_COUNT -> ports $((INBOUND_BASE_PORT+1))..$((INBOUND_BASE_PORT+INBOUND_COUNT))"
 echo "   raw TCP inbound: port $TCP_INBOUND_PORT (Railway TCP Proxy target)"
 [ -n "$HOST_ROUTES" ] && echo "   host routes    : $HOST_ROUTES"
 
-cd /usr/local/x-ui
+cd /app
 
-echo "🔧 Applying panel settings via x-ui CLI (panel internal port = 2053, base path = /gucci/)..."
-./x-ui setting -port 2053 -webBasePath /gucci/ || true
+# مایگریشن دیتابیس (مثل entrypoint رسمی)
+if [ -f /app/db/s-ui.db ]; then
+    echo "🔧 Migrating existing s-ui DB..."
+    ./sui migrate || true
+else
+    # ساخت دیتابیس تازه با مقادیر پیش‌فرض تا تنظیمات ساب همین الان اعمال شوند
+    echo "🔧 First run: creating fresh s-ui DB..."
+    ./sui setting -show >/dev/null 2>&1 || true
+fi
 
-DB=/etc/x-ui/x-ui.db
+# ---------------------------------------------------------------------
+# گواهی خودامضا برای سرویس ساب:
+# با ست شدن subCertFile/subKeyFile، سابسکریپشن روی 127.0.0.1:443 بالا می‌آید و
+# لینک‌های ساب به‌صورت https://{دامنه‌ی درخواست}/sub/ (بدون پورت) ساخته می‌شوند.
+# سرور ساب auto-https است و کانکشن HTTP ساده از nginx را هم می‌پذیرد.
+# ---------------------------------------------------------------------
+mkdir -p /app/cert
+if [ ! -f /app/cert/sub-cert.pem ] || [ ! -f /app/cert/sub-key.pem ]; then
+    echo "🔧 Generating self-signed cert for sub service..."
+    openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+        -keyout /app/cert/sub-key.pem -out /app/cert/sub-cert.pem \
+        -subj "/CN=localhost" 2>/dev/null \
+        && echo "  ✔ cert generated" || echo "  ⚠️ cert generation failed"
+fi
 
-# تنظیم امن یک کلید در جدول settings:
-# در دیتابیس تازه این جدول خالی است (UPDATE به تنهایی هیچ ردیفی را تغییر نمی‌دهد)،
-# پس اول UPDATE و در صورت نبود ردیف INSERT می‌کنیم.
+DB=/app/db/s-ui.db
+
+# تنظیم امن یک کلید در جدول settings (UPDATE + INSERT در صورت نبود ردیف)
 set_sub_setting() {
     local key="$1" value="$2"
     sqlite3 "$DB" "UPDATE settings SET value='$value' WHERE key='$key';
@@ -40,28 +60,16 @@ INSERT INTO settings (key, value) SELECT '$key','$value' WHERE NOT EXISTS (SELEC
 }
 
 if [ -f "$DB" ]; then
-    echo "🔧 Configuring subscription service (internal 127.0.0.1:443, HTTP)..."
-    set_sub_setting subEnable     true
-    set_sub_setting subJsonEnable false
-    set_sub_setting subListen     127.0.0.1
-    set_sub_setting subPort       443
-    set_sub_setting subPath       /sub/
-    set_sub_setting subJsonPath   /json/
-    set_sub_setting subClashPath  /clash/
-
-    # مسیرهای cert به‌صورت «نشانگر TLS» ست می‌شوند تا 3x-ui لینک‌ها را با https:// و
-    # بدون پورت بسازد:  https://{دامنه‌ی پنل}/sub/...
-    # (فایل‌ها وجود ندارند؛ سرویس ساب خودش به HTTP روی 127.0.0.1:443 برمی‌گردد)
-    set_sub_setting subCertFile   /etc/x-ui/sub-dummy-cert.pem
-    set_sub_setting subKeyFile    /etc/x-ui/sub-dummy-key.pem
-
-    # سه لینک ساب را خالی می‌گذاریم تا 3x-ui آن‌ها را به‌صورت داینامیک با همان دامنه‌ای که
-    # پنل با آن باز شده بسازد — برای هر دامنه‌ای کار می‌کند
-    set_sub_setting subURI        ""
-    set_sub_setting subJsonURI    ""
-    set_sub_setting subClashURI   ""
+    echo "🔧 Configuring subscription service (internal 127.0.0.1:443, dynamic https links)..."
+    set_sub_setting subListen   127.0.0.1
+    set_sub_setting subPort     443
+    set_sub_setting subPath     /sub/
+    set_sub_setting subCertFile /app/cert/sub-cert.pem
+    set_sub_setting subKeyFile  /app/cert/sub-key.pem
+    # خالی می‌گذاریم تا لینک ساب داینامیک با همان دامنه‌ای که پنل باز شده ساخته شود
+    set_sub_setting subURI      ""
 else
-    echo "⚠️  DB not found at $DB (x-ui will create it) - skipping sub settings"
+    echo "⚠️  DB not found at $DB (s-ui will create it on first run) - sub settings will apply on next boot"
 fi
 
 # ---------------------------------------------------------------------
@@ -140,15 +148,15 @@ awk -v inc="$GEN_DIR/inbounds.conf" -v hst="$GEN_DIR/hostroutes.conf" '
 
 rm -rf "$GEN_DIR"
 
-echo "▶️  Starting x-ui in background..."
-./x-ui &
-X_UI_PID=$!
+echo "▶️  Starting s-ui in background..."
+./sui &
+S_UI_PID=$!
 
-sleep 3
+sleep 4
 
 echo "▶️  Pre-flight checks..."
-curl -s -o /dev/null -w "  panel (x-ui)     http://127.0.0.1:2053/gucci/ -> HTTP %{http_code}\n" http://127.0.0.1:2053/gucci/ || echo "  panel not ready yet"
-curl -s -o /dev/null -w "  sub server       http://127.0.0.1:443/sub/x  -> HTTP %{http_code}\n" "http://127.0.0.1:443/sub/x" || echo "  sub server not ready yet"
+curl -s -o /dev/null -w "  panel (s-ui)     http://127.0.0.1:2095/app/ -> HTTP %{http_code}\n" http://127.0.0.1:2095/app/ || echo "  panel not ready yet"
+curl -s -k -o /dev/null -w "  sub server       https://127.0.0.1:443/sub/x -> HTTP %{http_code}\n" "https://127.0.0.1:443/sub/x" || echo "  sub server not ready yet"
 echo "  raw TCP inbound  : create it in the panel on port $TCP_INBOUND_PORT (TCP Proxy target)"
 
 echo "▶️  Starting nginx in foreground on port 1..."

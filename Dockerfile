@@ -1,27 +1,19 @@
-FROM alpine:3.19
+# GUCCI (s-ui edition) — s-ui + nginx reverse proxy روی Railway
+FROM ghcr.io/alireza0/s-ui:v1.5.4
+
+USER root
 
 RUN apk add --no-cache \
-    curl \
-    bash \
-    ca-certificates \
-    socat \
-    tzdata \
-    sqlite \
     nginx \
-    gettext \
+    sqlite \
+    openssl \
+    curl \
+    tzdata \
     && ln -sf /usr/share/zoneinfo/Asia/Tehran /etc/localtime
-
-# دانلود و نصب 3x-ui
-RUN curl -L https://github.com/mhsanaei/3x-ui/releases/download/v2.9.4/x-ui-linux-amd64.tar.gz -o /tmp/x-ui.tar.gz \
-    && tar -xzf /tmp/x-ui.tar.gz -C /usr/local/ \
-    && rm /tmp/x-ui.tar.gz \
-    && chmod +x /usr/local/x-ui/x-ui
-
-RUN mkdir -p /etc/x-ui /var/log/x-ui
 
 COPY nginx.conf.template /etc/nginx/nginx.conf.template
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
-# Railway پورت رو از طریق متغیر $PORT تزریق می‌کند
+# Railway پورت رو از طریق متغیر $PORT تزریق می‌کند؛ nginx روی پورت 1 گوش می‌دهد
 CMD ["/start.sh"]
