@@ -73,6 +73,27 @@ else
 fi
 
 # ---------------------------------------------------------------------
+# 🩹 خودترمیمی: اینباندهایی که TLS با گواهی خالی دارند، کل هسته Xray را
+# کرش می‌دهند و همه اینباندهای دیگر را هم می‌اندازند. اینجا به‌صورت خودکار
+# TLSِ بدون گواهی از آن‌ها جدا می‌شود (Reality دست‌نخورده می‌ماند).
+# ---------------------------------------------------------------------
+if [ -f "$DB" ]; then
+    HEALED=$(sqlite3 "$DB" "
+UPDATE inbounds SET tls_id=NULL
+WHERE IFNULL(tls_id,0) > 0
+  AND tls_id IN (
+    SELECT id FROM tls
+    WHERE CAST(server AS TEXT) NOT LIKE '%privateKey%'
+      AND IFNULL(json_extract(CAST(server AS TEXT),'\$.certificateFile'),'')=''
+      AND IFNULL(json_extract(CAST(server AS TEXT),'\$.keyFile'),'')=''
+      AND IFNULL(json_extract(CAST(server AS TEXT),'\$.certificate'),'')=''
+      AND IFNULL(json_extract(CAST(server AS TEXT),'\$.key'),'')=''
+  );
+SELECT changes();" 2>/dev/null || echo 0)
+    [ "${HEALED:-0}" != "0" ] && echo "🩹 healed $HEALED inbound(s) with empty TLS cert (TLS detached) so xray core can start"
+fi
+
+# ---------------------------------------------------------------------
 # تولید کانفیگ nginx (داینامیک)
 # ---------------------------------------------------------------------
 GEN_DIR=$(mktemp -d)
@@ -212,8 +233,12 @@ E
 E
 
     echo "▶️  Starting standalone Xray (Reality on port $TCP_INBOUND_PORT)..."
-    "$XRAY_BIN" run -c /etc/x-ui/tcp-node.json &
-    echo "  ✔ Reality inbound ready"
+    if "$XRAY_BIN" run -test -c /etc/x-ui/tcp-node.json >/dev/null 2>&1; then
+        "$XRAY_BIN" run -c /etc/x-ui/tcp-node.json 2>/var/log/x-ui/reality.log &
+        echo "  ✔ Reality inbound ready"
+    else
+        echo "  ⚠️  Reality config invalid - sidecar skipped (see /var/log/x-ui/reality.log)"
+    fi
     echo "  🔗 client link (use your TCP Proxy host:port):"
     echo "  vless://$REALITY_UUID@__TCP_PROXY_HOST__:__TCP_PROXY_PORT__?encryption=none&security=reality&sni=www.microsoft.com&fp=chrome&pbk=$REALITY_PUB&sid=$REALITY_SID&type=tcp&headerType=none#GUCCI-Reality"
 else
