@@ -24,6 +24,16 @@ echo "   raw TCP inbound: port $TCP_INBOUND_PORT (optional; design default = dom
 
 cd /app
 
+# ---------------------------------------------------------------------
+# ⚠️ ریست کامل دیتابیس (فقط با متغیر RESET_DB=1 در Railway):
+# همه‌چیز (کلاینت‌ها، اینباندها، یوزرها) پاک و از صفر ساخته می‌شود.
+# ---------------------------------------------------------------------
+if [ "${RESET_DB:-0}" = "1" ]; then
+    echo "⚠️  RESET_DB=1 -> wiping s-ui database for a fresh start..."
+    rm -f /app/db/s-ui.db /app/db/s-ui.db-shm /app/db/s-ui.db-wal
+    echo "  ✔ old database removed"
+fi
+
 # مایگریشن دیتابیس (مثل entrypoint رسمی)
 if [ -f /app/db/s-ui.db ]; then
     echo "🔧 Migrating existing s-ui DB..."
@@ -77,16 +87,23 @@ else
 fi
 
 # ---------------------------------------------------------------------
-# 🧼 پاکسازی flow=xtls-rprx-vision از کانفیگ‌ها:
+# 🧼 تعمیر + پاکسازی flow=xtls-rprx-vision از کانفیگ‌ها:
 # Vision روی WebSocket باعث کرش sing-box می‌شود (باگ بالادستی).
-# لینک‌ها و کانفیگ‌های ذخیره‌شده بدون vision بازتولید می‌شوند تا پنل پایدار بماند.
+# همه UPDATE ها با CAST ... AS BLOB انجام می‌شوند تا storage class ستون‌ها
+# (که blob است) دست‌نخورده بماند و s-ui بتواند بدون خطا Scan کند.
 # ---------------------------------------------------------------------
-if [ -f "$DB" ] && sqlite3 "$DB" "SELECT count(*) FROM clients;" 2>/dev/null | grep -qE "[1-9]"; then
-    echo "🧼 Sanitizing stored client configs (removing xtls-rprx-vision)..."
-    sqlite3 "$DB" "UPDATE clients SET links = replace(links, '&flow=xtls-rprx-vision', '') WHERE links LIKE '%xtls-rprx-vision%';"
-    sqlite3 "$DB" "UPDATE clients SET links = replace(links, '%26flow%3Dxtls-rprx-vision', '') WHERE links LIKE '%xtls-rprx-vision%';"
-    sqlite3 "$DB" "UPDATE clients SET config = replace(config, '\"flow\":\"xtls-rprx-vision\"', '\"flow\":\"\"') WHERE config LIKE '%xtls-rprx-vision%';"
-    echo "  ✔ vision removed from stored clients (re-import links in your client app)"
+if [ -f "$DB" ]; then
+    # تعمیر خودکار: ستون‌هایی که قبلاً به TEXT تبدیل شده‌اند را به BLOB برگردان
+    sqlite3 "$DB" "UPDATE clients SET config = CAST(config AS BLOB) WHERE typeof(config)='text';
+UPDATE clients SET links  = CAST(links  AS BLOB) WHERE typeof(links)='text';" 2>/dev/null || true
+
+    if sqlite3 "$DB" "SELECT count(*) FROM clients;" 2>/dev/null | grep -qE "[1-9]"; then
+        echo "🧼 Sanitizing stored client configs (removing xtls-rprx-vision, blob-safe)..."
+        sqlite3 "$DB" "UPDATE clients SET links = CAST(replace(links, '&flow=xtls-rprx-vision', '') AS BLOB) WHERE CAST(links AS TEXT) LIKE '%xtls-rprx-vision%';"
+        sqlite3 "$DB" "UPDATE clients SET links = CAST(replace(links, '%26flow%3Dxtls-rprx-vision', '') AS BLOB) WHERE CAST(links AS TEXT) LIKE '%xtls-rprx-vision%';"
+        sqlite3 "$DB" "UPDATE clients SET config = CAST(replace(config, '\"flow\":\"xtls-rprx-vision\"', '\"flow\":\"\"') AS BLOB) WHERE CAST(config AS TEXT) LIKE '%xtls-rprx-vision%';"
+        echo "  ✔ vision removed (re-import fresh links in your client app)"
+    fi
 fi
 
 # ---------------------------------------------------------------------
