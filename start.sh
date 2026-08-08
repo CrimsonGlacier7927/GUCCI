@@ -248,6 +248,16 @@ E
           "shortIds": [ "$REALITY_SID" ]
         }
       }
+    },
+    {
+      "port": $((TCP_INBOUND_PORT + 1)),
+      "listen": "0.0.0.0",
+      "protocol": "vless",
+      "tag": "gucci-tcp-plain",
+      "settings": {
+        "clients": [ { "id": "$REALITY_UUID" } ],
+        "decryption": "none"
+      }
     }
   ],
   "outbounds": [ { "protocol": "freedom", "tag": "direct" } ]
