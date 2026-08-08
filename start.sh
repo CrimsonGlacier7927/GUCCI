@@ -178,12 +178,22 @@ done
 ENV_FILE=/etc/x-ui/reality.env
 if [ -n "$XRAY_BIN" ]; then
     if [ ! -f "$ENV_FILE" ]; then
-        echo "🔑 Generating Reality keys (persisted on volume)..."
-        KEYS=$("$XRAY_BIN" x25519 || true)
-        REALITY_PRIV=$(echo "$KEYS" | awk '/PrivateKey:/{print $2}')
-        REALITY_PUB=$(echo "$KEYS" | awk '/PublicKey/{print $3}')
-        REALITY_UUID=$(cat /proc/sys/kernel/random/uuid)
-        REALITY_SID=$(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n')
+        if [ -n "$REALITY_SEED" ]; then
+            # کلیدهای قطعی از seed (برای سرویس‌های node بدون Volume)
+            echo "🔑 Deriving Reality keys from REALITY_SEED..."
+            REALITY_PRIV=$(printf %s "$REALITY_SEED" | openssl dgst -sha256 -binary | openssl base64 -A | tr '+/' '-_' | tr -d '=')
+            REALITY_PUB=$("$XRAY_BIN" x25519 -i "$REALITY_PRIV" | awk '/PublicKey/{print $3}')
+            H1=$(printf %s "$REALITY_SEED-uuid" | openssl dgst -sha256 | awk '{print $NF}')
+            REALITY_UUID="${H1:0:8}-${H1:8:4}-${H1:12:4}-${H1:16:4}-${H1:20:12}"
+            REALITY_SID=$(printf %s "$REALITY_SEED-sid" | openssl dgst -sha256 | awk '{print $NF}' | head -c 16)
+        else
+            echo "🔑 Generating Reality keys (persisted on volume)..."
+            KEYS=$("$XRAY_BIN" x25519 || true)
+            REALITY_PRIV=$(echo "$KEYS" | awk '/PrivateKey:/{print $2}')
+            REALITY_PUB=$(echo "$KEYS" | awk '/PublicKey/{print $3}')
+            REALITY_UUID=$(cat /proc/sys/kernel/random/uuid)
+            REALITY_SID=$(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n')
+        fi
         cat > "$ENV_FILE" <<E
 REALITY_PRIV=$REALITY_PRIV
 REALITY_PUB=$REALITY_PUB
@@ -241,6 +251,16 @@ E
       "listen": "0.0.0.0",
       "protocol": "vless",
       "tag": "gucci-tcp-plain",
+      "settings": {
+        "clients": [ { "id": "$REALITY_UUID" } ],
+        "decryption": "none"
+      }
+    },
+    {
+      "port": $((TCP_INBOUND_PORT + 2)),
+      "listen": "0.0.0.0",
+      "protocol": "vless",
+      "tag": "gucci-tcp-plain2",
       "settings": {
         "clients": [ { "id": "$REALITY_UUID" } ],
         "decryption": "none"
