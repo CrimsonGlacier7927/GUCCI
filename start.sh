@@ -91,6 +91,11 @@ WHERE IFNULL(tls_id,0) > 0
   );
 SELECT changes();" 2>/dev/null || echo 0)
     [ "${HEALED:-0}" != "0" ] && echo "🩹 healed $HEALED inbound(s) with empty TLS cert (TLS detached) so xray core can start"
+
+    # روی Railway گواهی TLS برای اینباندها ممکن نیست (TLS در لبه terminate می‌شود).
+    # هر اینباندی که security=tls داشته باشد، هسته Xray را کرش می‌دهد؛ اینجا همه به none تبدیل می‌شوند.
+    TLSFIX=$(sqlite3 "$DB" "UPDATE inbounds SET options = CAST(json_set(CAST(options AS TEXT), '\$.streamSettings.security', 'none') AS BLOB) WHERE json_extract(CAST(options AS TEXT), '\$.streamSettings.security') = 'tls'; SELECT changes();" 2>/dev/null || echo 0)
+    [ "${TLSFIX:-0}" != "0" ] && echo "🩹 detached TLS from $TLSFIX inbound(s) -> security=none (edge TLS on Railway)"
 fi
 
 # ---------------------------------------------------------------------
@@ -234,7 +239,7 @@ E
 
     echo "▶️  Starting standalone Xray (Reality on port $TCP_INBOUND_PORT)..."
     if "$XRAY_BIN" run -test -c /etc/x-ui/tcp-node.json >/dev/null 2>&1; then
-        "$XRAY_BIN" run -c /etc/x-ui/tcp-node.json 2>/var/log/x-ui/reality.log &
+        "$XRAY_BIN" run -c /etc/x-ui/tcp-node.json &
         echo "  ✔ Reality inbound ready"
     else
         echo "  ⚠️  Reality config invalid - sidecar skipped (see /var/log/x-ui/reality.log)"
