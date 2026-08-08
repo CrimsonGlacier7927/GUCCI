@@ -154,6 +154,72 @@ X_UI_PID=$!
 
 sleep 3
 
+# ---------------------------------------------------------------------
+#  هسته Xray مستقل برای اینباند TCP خام (Reality) — خارج از پنل
+# پورت TCP_INBOUND_PORT (پیش‌فرض 9090) را با VLESS+Reality پر می‌کند تا
+# TCP Proxy رای‌وی بدون هیچ تنظیمی در پنل، همین الان کار کند.
+# کلیدها روی Volume ذخیره می‌شوند -> لینک کلاینت بین دیپلوی‌ها ثابت است.
+# ---------------------------------------------------------------------
+XRAY_BIN=""
+for c in /usr/local/x-ui/bin/xray /usr/local/x-ui/bin/xray-linux-amd64; do
+    [ -x "$c" ] && XRAY_BIN="$c" && break
+done
+ENV_FILE=/etc/x-ui/reality.env
+if [ -n "$XRAY_BIN" ]; then
+    if [ ! -f "$ENV_FILE" ]; then
+        echo "🔑 Generating Reality keys (persisted on volume)..."
+        KEYS=$("$XRAY_BIN" x25519 || true)
+        REALITY_PRIV=$(echo "$KEYS" | awk '/PrivateKey:/{print $2}')
+        REALITY_PUB=$(echo "$KEYS" | awk '/PublicKey/{print $3}')
+        REALITY_UUID=$(cat /proc/sys/kernel/random/uuid)
+        REALITY_SID=$(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n')
+        cat > "$ENV_FILE" <<E
+REALITY_PRIV=$REALITY_PRIV
+REALITY_PUB=$REALITY_PUB
+REALITY_UUID=$REALITY_UUID
+REALITY_SID=$REALITY_SID
+E
+    fi
+    . "$ENV_FILE"
+
+    cat > /etc/x-ui/tcp-node.json <<E
+{
+  "log": { "loglevel": "warning" },
+  "inbounds": [
+    {
+      "port": $TCP_INBOUND_PORT,
+      "listen": "0.0.0.0",
+      "protocol": "vless",
+      "tag": "gucci-reality",
+      "settings": {
+        "clients": [ { "id": "$REALITY_UUID" } ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "dest": "www.microsoft.com:443",
+          "serverNames": [ "www.microsoft.com" ],
+          "privateKey": "$REALITY_PRIV",
+          "shortIds": [ "$REALITY_SID" ]
+        }
+      }
+    }
+  ],
+  "outbounds": [ { "protocol": "freedom", "tag": "direct" } ]
+}
+E
+
+    echo "▶️  Starting standalone Xray (Reality on port $TCP_INBOUND_PORT)..."
+    "$XRAY_BIN" run -c /etc/x-ui/tcp-node.json &
+    echo "  ✔ Reality inbound ready"
+    echo "  🔗 client link (use your TCP Proxy host:port):"
+    echo "  vless://$REALITY_UUID@__TCP_PROXY_HOST__:__TCP_PROXY_PORT__?encryption=none&security=reality&sni=www.microsoft.com&fp=chrome&pbk=$REALITY_PUB&sid=$REALITY_SID&type=tcp&headerType=none#GUCCI-Reality"
+else
+    echo "⚠️  xray binary not found - skipping standalone Reality inbound"
+fi
+
 echo "▶️  Pre-flight checks..."
 curl -s -o /dev/null -w "  panel (x-ui)     http://127.0.0.1:2053/gucci/ -> HTTP %{http_code}\n" http://127.0.0.1:2053/gucci/ || echo "  panel not ready yet"
 curl -s -o /dev/null -w "  sub server       http://127.0.0.1:443/sub/x  -> HTTP %{http_code}\n" "http://127.0.0.1:443/sub/x" || echo "  sub server not ready yet"
