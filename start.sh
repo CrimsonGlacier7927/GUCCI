@@ -83,11 +83,9 @@ UPDATE inbounds SET tls_id=NULL
 WHERE IFNULL(tls_id,0) > 0
   AND tls_id IN (
     SELECT id FROM tls
-    WHERE CAST(server AS TEXT) NOT LIKE '%privateKey%'
-      AND IFNULL(json_extract(CAST(server AS TEXT),'\$.certificateFile'),'')=''
-      AND IFNULL(json_extract(CAST(server AS TEXT),'\$.keyFile'),'')=''
-      AND IFNULL(json_extract(CAST(server AS TEXT),'\$.certificate'),'')=''
-      AND IFNULL(json_extract(CAST(server AS TEXT),'\$.key'),'')=''
+    WHERE IFNULL(CAST(server AS TEXT),'') NOT LIKE '%privateKey%'
+      AND IFNULL(CAST(server AS TEXT),'') NOT LIKE '%BEGIN%'
+      AND IFNULL(CAST(client AS TEXT),'') NOT LIKE '%BEGIN%'
   );
 SELECT changes();" 2>/dev/null || echo 0)
     [ "${HEALED:-0}" != "0" ] && echo "🩹 healed $HEALED inbound(s) with empty TLS cert (TLS detached) so xray core can start"
@@ -206,7 +204,26 @@ REALITY_UUID=$REALITY_UUID
 REALITY_SID=$REALITY_SID
 E
     fi
+    if [ "${REALITY_REGEN:-0}" = "1" ]; then
+        echo "⚠️  REALITY_REGEN=1 -> regenerating Reality keys..."
+        rm -f "$ENV_FILE"
+        KEYS=$("$XRAY_BIN" x25519 || true)
+        REALITY_PRIV=$(echo "$KEYS" | awk '/PrivateKey:/{print $2}')
+        REALITY_PUB=$(echo "$KEYS" | awk '/PublicKey/{print $3}')
+        REALITY_UUID=$(cat /proc/sys/kernel/random/uuid)
+        REALITY_SID=$(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n')
+        cat > "$ENV_FILE" <<E
+REALITY_PRIV=$REALITY_PRIV
+REALITY_PUB=$REALITY_PUB
+REALITY_UUID=$REALITY_UUID
+REALITY_SID=$REALITY_SID
+E
+    fi
     . "$ENV_FILE"
+
+    # بررسی یکپارچگی کلیدها (pub نمایش‌داده‌شده باید با pub مشتق‌شده از priv یکی باشد)
+    DERIVED=$("$XRAY_BIN" x25519 -i "$REALITY_PRIV" 2>/dev/null | awk '/PublicKey/{print $3}')
+    echo "  key check: pub=$REALITY_PUB derived=$DERIVED priv_len=${#REALITY_PRIV} sid=$REALITY_SID"
 
     cat > /etc/x-ui/tcp-node.json <<E
 {
