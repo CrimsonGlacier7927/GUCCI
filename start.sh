@@ -2,70 +2,45 @@
 set -e
 
 # =====================================================================
-#  GUCCI (s-ui edition) — s-ui + nginx reverse proxy روی Railway
+#  GUCCI (3x-ui / Sanaei v3.0.2) — nginx reverse proxy روی Railway
 #
 #  متغیرهای محیطی قابل تنظیم (در Railway → Service → Variables):
 #    INBOUND_COUNT     تعداد اینباندهای اضافه /in1..inN   (پیش‌فرض: 50)
 #    INBOUND_BASE_PORT پورت پایه اینباندهای اضافه          (پیش‌فرض: 8080)
-#    TCP_INBOUND_PORT  پورت اینباند TCP خام (اختیاری - پیش‌فرض: 9090)
+#    TCP_INBOUND_PORT  پورت اینباند TCP خام برای TCP Proxy (پیش‌فرض: 9090)
 #    HOST_ROUTES       مسیریابی دامنه اختصاصی (اختیاری)
 #                      مثال: "sub1.example.com:8081,sub2.example.com:8082"
+#    RESET_DB          اگر 1 باشد دیتابیس کامل پاک و از صفر ساخته می‌شود
 # =====================================================================
 
 INBOUND_COUNT="${INBOUND_COUNT:-50}"
 INBOUND_BASE_PORT="${INBOUND_BASE_PORT:-8080}"
 TCP_INBOUND_PORT="${TCP_INBOUND_PORT:-9090}"
 HOST_ROUTES="${HOST_ROUTES:-}"
+RESET_DB="${RESET_DB:-0}"
 
-echo "🚀 Starting s-ui + nginx reverse proxy (GUCCI s-ui edition)..."
+echo "🚀 Starting 3x-ui (Sanaei) + nginx reverse proxy (GUCCI)..."
 echo "   inbound paths  : /in1..in$INBOUND_COUNT -> ports $((INBOUND_BASE_PORT+1))..$((INBOUND_BASE_PORT+INBOUND_COUNT))"
-echo "   raw TCP inbound: port $TCP_INBOUND_PORT (optional; design default = domain:443 only, no TCP Proxy)"
+echo "   raw TCP inbound: port $TCP_INBOUND_PORT (Railway TCP Proxy target)"
 [ -n "$HOST_ROUTES" ] && echo "   host routes    : $HOST_ROUTES"
 
-cd /app
-
-# ---------------------------------------------------------------------
-# ⚠️ ریست کامل دیتابیس (فقط با متغیر RESET_DB=1 در Railway):
-# همه‌چیز (کلاینت‌ها، اینباندها، یوزرها) پاک و از صفر ساخته می‌شود.
-# ---------------------------------------------------------------------
-if [ "${RESET_DB:-0}" = "1" ]; then
-    echo "⚠️  RESET_DB=1 -> wiping s-ui database for a fresh start..."
-    rm -f /app/db/s-ui.db /app/db/s-ui.db-shm /app/db/s-ui.db-wal
+# ریست کامل دیتابیس در صورت نیاز
+if [ "$RESET_DB" = "1" ]; then
+    echo "⚠️  RESET_DB=1 -> wiping x-ui database for a fresh start..."
+    rm -f /etc/x-ui/x-ui.db /etc/x-ui/x-ui.db-shm /etc/x-ui/x-ui.db-wal
     echo "  ✔ old database removed"
 fi
 
-# مایگریشن دیتابیس (مثل entrypoint رسمی)
-if [ -f /app/db/s-ui.db ]; then
-    echo "🔧 Migrating existing s-ui DB..."
-    ./sui migrate || true
-else
-    # ساخت دیتابیس تازه با مقادیر پیش‌فرض تا تنظیمات ساب همین الان اعمال شوند
-    echo "🔧 First run: creating fresh s-ui DB..."
-    ./sui setting -show >/dev/null 2>&1 || true
-fi
+cd /usr/local/x-ui
 
-# مسیر وب پنل: فقط /gucci/ (مثل نسخه قبلی پروژه)
-echo "🔧 Setting panel web path to /gucci/ ..."
-./sui setting -path /gucci/ || true
+echo "🔧 Applying panel settings via x-ui CLI (panel internal port = 2053, base path = /gucci/)..."
+./x-ui setting -port 2053 -webBasePath /gucci/ || true
 
-# ---------------------------------------------------------------------
-# گواهی خودامضا برای سرویس ساب:
-# با ست شدن subCertFile/subKeyFile، سابسکریپشن روی 127.0.0.1:443 بالا می‌آید و
-# لینک‌های ساب به‌صورت https://{دامنه‌ی درخواست}/sub/ (بدون پورت) ساخته می‌شوند.
-# سرور ساب auto-https است و کانکشن HTTP ساده از nginx را هم می‌پذیرد.
-# ---------------------------------------------------------------------
-mkdir -p /app/cert
-if [ ! -f /app/cert/sub-cert.pem ] || [ ! -f /app/cert/sub-key.pem ]; then
-    echo "🔧 Generating self-signed cert for sub service..."
-    openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
-        -keyout /app/cert/sub-key.pem -out /app/cert/sub-cert.pem \
-        -subj "/CN=localhost" 2>/dev/null \
-        && echo "  ✔ cert generated" || echo "  ⚠️ cert generation failed"
-fi
+DB=/etc/x-ui/x-ui.db
 
-DB=/app/db/s-ui.db
-
-# تنظیم امن یک کلید در جدول settings (UPDATE + INSERT در صورت نبود ردیف)
+# تنظیم امن یک کلید در جدول settings:
+# در دیتابیس تازه این جدول خالی است (UPDATE به تنهایی هیچ ردیفی را تغییر نمی‌دهد)،
+# پس اول UPDATE و در صورت نبود ردیف INSERT می‌کنیم.
 set_sub_setting() {
     local key="$1" value="$2"
     sqlite3 "$DB" "UPDATE settings SET value='$value' WHERE key='$key';
@@ -74,36 +49,27 @@ INSERT INTO settings (key, value) SELECT '$key','$value' WHERE NOT EXISTS (SELEC
 }
 
 if [ -f "$DB" ]; then
-    echo "🔧 Configuring subscription service (internal 127.0.0.1:443, dynamic https links)..."
-    set_sub_setting subListen   127.0.0.1
-    set_sub_setting subPort     443
-    set_sub_setting subPath     /sub/
-    set_sub_setting subCertFile /app/cert/sub-cert.pem
-    set_sub_setting subKeyFile  /app/cert/sub-key.pem
-    # خالی می‌گذاریم تا لینک ساب داینامیک با همان دامنه‌ای که پنل باز شده ساخته شود
-    set_sub_setting subURI      ""
+    echo "🔧 Configuring subscription service (internal 127.0.0.1:443, HTTP)..."
+    set_sub_setting subEnable     true
+    set_sub_setting subJsonEnable false
+    set_sub_setting subListen     127.0.0.1
+    set_sub_setting subPort       443
+    set_sub_setting subPath       /sub/
+    set_sub_setting subJsonPath   /json/
+    set_sub_setting subClashPath  /clash/
+
+    # مسیرهای cert به‌صورت «نشانگر TLS» ست می‌شوند تا 3x-ui لینک‌ها را با https:// و
+    # بدون پورت بسازد:  https://{دامنه‌ی پنل}/sub/...
+    # (فایل‌ها وجود ندارند؛ سرویس ساب خودش به HTTP روی 127.0.0.1:443 برمی‌گردد)
+    set_sub_setting subCertFile   /etc/x-ui/sub-dummy-cert.pem
+    set_sub_setting subKeyFile    /etc/x-ui/sub-dummy-key.pem
+
+    # سه لینک ساب خالی -> لینک داینامیک با همان دامنه‌ای که پنل با آن باز شده
+    set_sub_setting subURI        ""
+    set_sub_setting subJsonURI    ""
+    set_sub_setting subClashURI   ""
 else
-    echo "⚠️  DB not found at $DB (s-ui will create it on first run) - sub settings will apply on next boot"
-fi
-
-# ---------------------------------------------------------------------
-# 🧼 تعمیر + پاکسازی flow=xtls-rprx-vision از کانفیگ‌ها:
-# Vision روی WebSocket باعث کرش sing-box می‌شود (باگ بالادستی).
-# همه UPDATE ها با CAST ... AS BLOB انجام می‌شوند تا storage class ستون‌ها
-# (که blob است) دست‌نخورده بماند و s-ui بتواند بدون خطا Scan کند.
-# ---------------------------------------------------------------------
-if [ -f "$DB" ]; then
-    # تعمیر خودکار: ستون‌هایی که قبلاً به TEXT تبدیل شده‌اند را به BLOB برگردان
-    sqlite3 "$DB" "UPDATE clients SET config = CAST(config AS BLOB) WHERE typeof(config)='text';
-UPDATE clients SET links  = CAST(links  AS BLOB) WHERE typeof(links)='text';" 2>/dev/null || true
-
-    if sqlite3 "$DB" "SELECT count(*) FROM clients;" 2>/dev/null | grep -qE "[1-9]"; then
-        echo "🧼 Sanitizing stored client configs (removing xtls-rprx-vision, blob-safe)..."
-        sqlite3 "$DB" "UPDATE clients SET links = CAST(replace(links, '&flow=xtls-rprx-vision', '') AS BLOB) WHERE CAST(links AS TEXT) LIKE '%xtls-rprx-vision%';"
-        sqlite3 "$DB" "UPDATE clients SET links = CAST(replace(links, '%26flow%3Dxtls-rprx-vision', '') AS BLOB) WHERE CAST(links AS TEXT) LIKE '%xtls-rprx-vision%';"
-        sqlite3 "$DB" "UPDATE clients SET config = CAST(replace(config, '\"flow\":\"xtls-rprx-vision\"', '\"flow\":\"\"') AS BLOB) WHERE CAST(config AS TEXT) LIKE '%xtls-rprx-vision%';"
-        echo "  ✔ vision removed (re-import fresh links in your client app)"
-    fi
+    echo "⚠️  DB not found at $DB (x-ui will create it) - skipping sub settings"
 fi
 
 # ---------------------------------------------------------------------
@@ -134,7 +100,7 @@ EOF
     done
 }
 
-# ۲) سرورهای دامنه اختصاصی: هر دامنه -> پورت اینباند خودش (ClawCloud-style)
+# ۲) سرورهای دامنه اختصاصی: هر دامنه -> پورت اینباند خودش
 gen_host_route_servers() {
     [ -z "$HOST_ROUTES" ] && return 0
     local r host port
@@ -182,16 +148,16 @@ awk -v inc="$GEN_DIR/inbounds.conf" -v hst="$GEN_DIR/hostroutes.conf" '
 
 rm -rf "$GEN_DIR"
 
-echo "▶️  Starting s-ui in background..."
-./sui &
-S_UI_PID=$!
+echo "▶️  Starting x-ui in background..."
+./x-ui &
+X_UI_PID=$!
 
-sleep 4
+sleep 3
 
 echo "▶️  Pre-flight checks..."
-curl -s -o /dev/null -w "  panel (s-ui)     http://127.0.0.1:2095/gucci/ -> HTTP %{http_code}\n" http://127.0.0.1:2095/gucci/ || echo "  panel not ready yet"
-curl -s -k -o /dev/null -w "  sub server       https://127.0.0.1:443/sub/x -> HTTP %{http_code}\n" "https://127.0.0.1:443/sub/x" || echo "  sub server not ready yet"
-echo "  raw TCP inbound  : optional port $TCP_INBOUND_PORT (default design: domain:443 only, no TCP Proxy)"
+curl -s -o /dev/null -w "  panel (x-ui)     http://127.0.0.1:2053/gucci/ -> HTTP %{http_code}\n" http://127.0.0.1:2053/gucci/ || echo "  panel not ready yet"
+curl -s -o /dev/null -w "  sub server       http://127.0.0.1:443/sub/x  -> HTTP %{http_code}\n" "http://127.0.0.1:443/sub/x" || echo "  sub server not ready yet"
+echo "  raw TCP inbound  : create it in the panel on port $TCP_INBOUND_PORT (TCP Proxy target)"
 
 echo "▶️  Starting nginx in foreground on port 1..."
 nginx -t
