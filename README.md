@@ -1,6 +1,6 @@
-# GUCCI — پنل 3x-ui سنایی (v3.0.2) روی Railway
+# GUCCI — پنل 3x-ui سنایی (v3.4.2) روی Railway
 
-پنل **3x-ui (MHSanaei/Sanaei) نسخه v3.0.2** + nginx reverse proxy با معماری تک‌پورت:
+پنل **3x-ui (MHSanaei/Sanaei) نسخه v3.4.2** + nginx reverse proxy با معماری تک‌پورت:
 
 - ✅ پنل روی `https://دامنه/gucci/`
 - ✅ سابسکریپشن داینامیک `https://دامنه/sub/{subId}` (لینک اشتباه → صفحه سیاه)
