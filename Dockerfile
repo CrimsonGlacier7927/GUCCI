@@ -13,6 +13,7 @@ RUN apk add --no-cache \
     sqlite \
     nginx \
     gettext \
+    openssl \
     && ln -sf /usr/share/zoneinfo/Asia/Tehran /etc/localtime
 
 # دانلود و نصب 3x-ui (سنایی)
