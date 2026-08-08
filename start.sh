@@ -73,27 +73,14 @@ else
 fi
 
 # ---------------------------------------------------------------------
-# 🩹 خودترمیمی: اینباندهایی که TLS با گواهی خالی دارند، کل هسته Xray را
-# کرش می‌دهند و همه اینباندهای دیگر را هم می‌اندازند. اینجا به‌صورت خودکار
-# TLSِ بدون گواهی از آن‌ها جدا می‌شود (Reality دست‌نخورده می‌ماند).
+# 🩹 خودترمیمی: اینباندهایی که security=tls دارند (با گواهی خالی) کل هسته
+# Xray را کرش می‌دهند و همه اینباندهای دیگر را هم می‌اندازند. روی Railway
+# TLS در لبه terminate می‌شود، پس security آن‌ها به none تبدیل می‌شود.
+# (Reality دست‌نخورده می‌ماند.)
 # ---------------------------------------------------------------------
 if [ -f "$DB" ]; then
-    HEALED=$(sqlite3 "$DB" "
-UPDATE inbounds SET tls_id=NULL
-WHERE IFNULL(tls_id,0) > 0
-  AND tls_id IN (
-    SELECT id FROM tls
-    WHERE IFNULL(CAST(server AS TEXT),'') NOT LIKE '%privateKey%'
-      AND IFNULL(CAST(server AS TEXT),'') NOT LIKE '%BEGIN%'
-      AND IFNULL(CAST(client AS TEXT),'') NOT LIKE '%BEGIN%'
-  );
-SELECT changes();" 2>/dev/null || echo 0)
-    [ "${HEALED:-0}" != "0" ] && echo "🩹 healed $HEALED inbound(s) with empty TLS cert (TLS detached) so xray core can start"
-
-    # روی Railway گواهی TLS برای اینباندها ممکن نیست (TLS در لبه terminate می‌شود).
-    # هر اینباندی که security=tls داشته باشد، هسته Xray را کرش می‌دهد؛ اینجا همه به none تبدیل می‌شوند.
-    TLSFIX=$(sqlite3 "$DB" "UPDATE inbounds SET options = CAST(json_set(CAST(options AS TEXT), '\$.streamSettings.security', 'none') AS BLOB) WHERE json_extract(CAST(options AS TEXT), '\$.streamSettings.security') = 'tls'; SELECT changes();" 2>/dev/null || echo 0)
-    [ "${TLSFIX:-0}" != "0" ] && echo "🩹 detached TLS from $TLSFIX inbound(s) -> security=none (edge TLS on Railway)"
+    TLSFIX=$(sqlite3 "$DB" "UPDATE inbounds SET stream_settings = json_set(stream_settings, '\$.security', 'none') WHERE json_extract(stream_settings, '\$.security') = 'tls'; SELECT changes();" 2>/dev/null || echo 0)
+    [ "${TLSFIX:-0}" != "0" ] && echo "🩹 detached TLS from $TLSFIX inbound(s) -> security=none (Railway edge terminates TLS)"
 fi
 
 # ---------------------------------------------------------------------
