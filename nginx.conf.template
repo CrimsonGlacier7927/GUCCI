@@ -35,14 +35,14 @@ http {
             return 200 '<!DOCTYPE html><html><head><title></title></head><body style="margin:0;padding:0;background:#000000;width:100vw;height:100vh;"></body></html>';
         }
 
-        # /app بدون اسلش -> ریدایرکت به /app/
-        location = /app {
-            return 301 /app/;
+        # /gucci بدون اسلش -> ریدایرکت به /gucci/
+        location = /gucci {
+            return 301 /gucci/;
         }
 
-        # پنل s-ui -> پورت داخلی 2095 (فقط با مسیر /app/ باز می‌شود)
-        location /app/ {
-            proxy_pass http://127.0.0.1:2095/app/;
+        # پنل s-ui -> پورت داخلی 2095 (فقط با مسیر /gucci/ باز می‌شود)
+        location /gucci/ {
+            proxy_pass http://127.0.0.1:2095/gucci/;
             proxy_http_version 1.1;
             proxy_buffering off;
             proxy_set_header Upgrade $http_upgrade;

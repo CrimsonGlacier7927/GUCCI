@@ -7,7 +7,7 @@ set -e
 #  متغیرهای محیطی قابل تنظیم (در Railway → Service → Variables):
 #    INBOUND_COUNT     تعداد اینباندهای اضافه /in1..inN   (پیش‌فرض: 50)
 #    INBOUND_BASE_PORT پورت پایه اینباندهای اضافه          (پیش‌فرض: 8080)
-#    TCP_INBOUND_PORT  پورت اینباند TCP خام برای TCP Proxy (پیش‌فرض: 9090)
+#    TCP_INBOUND_PORT  پورت اینباند TCP خام (اختیاری - پیش‌فرض: 9090)
 #    HOST_ROUTES       مسیریابی دامنه اختصاصی (اختیاری)
 #                      مثال: "sub1.example.com:8081,sub2.example.com:8082"
 # =====================================================================
@@ -19,7 +19,7 @@ HOST_ROUTES="${HOST_ROUTES:-}"
 
 echo "🚀 Starting s-ui + nginx reverse proxy (GUCCI s-ui edition)..."
 echo "   inbound paths  : /in1..in$INBOUND_COUNT -> ports $((INBOUND_BASE_PORT+1))..$((INBOUND_BASE_PORT+INBOUND_COUNT))"
-echo "   raw TCP inbound: port $TCP_INBOUND_PORT (Railway TCP Proxy target)"
+echo "   raw TCP inbound: port $TCP_INBOUND_PORT (optional; design default = domain:443 only, no TCP Proxy)"
 [ -n "$HOST_ROUTES" ] && echo "   host routes    : $HOST_ROUTES"
 
 cd /app
@@ -33,6 +33,10 @@ else
     echo "🔧 First run: creating fresh s-ui DB..."
     ./sui setting -show >/dev/null 2>&1 || true
 fi
+
+# مسیر وب پنل: فقط /gucci/ (مثل نسخه قبلی پروژه)
+echo "🔧 Setting panel web path to /gucci/ ..."
+./sui setting -path /gucci/ || true
 
 # ---------------------------------------------------------------------
 # گواهی خودامضا برای سرویس ساب:
@@ -70,6 +74,19 @@ if [ -f "$DB" ]; then
     set_sub_setting subURI      ""
 else
     echo "⚠️  DB not found at $DB (s-ui will create it on first run) - sub settings will apply on next boot"
+fi
+
+# ---------------------------------------------------------------------
+# 🧼 پاکسازی flow=xtls-rprx-vision از کانفیگ‌ها:
+# Vision روی WebSocket باعث کرش sing-box می‌شود (باگ بالادستی).
+# لینک‌ها و کانفیگ‌های ذخیره‌شده بدون vision بازتولید می‌شوند تا پنل پایدار بماند.
+# ---------------------------------------------------------------------
+if [ -f "$DB" ] && sqlite3 "$DB" "SELECT count(*) FROM clients;" 2>/dev/null | grep -qE "[1-9]"; then
+    echo "🧼 Sanitizing stored client configs (removing xtls-rprx-vision)..."
+    sqlite3 "$DB" "UPDATE clients SET links = replace(links, '&flow=xtls-rprx-vision', '') WHERE links LIKE '%xtls-rprx-vision%';"
+    sqlite3 "$DB" "UPDATE clients SET links = replace(links, '%26flow%3Dxtls-rprx-vision', '') WHERE links LIKE '%xtls-rprx-vision%';"
+    sqlite3 "$DB" "UPDATE clients SET config = replace(config, '\"flow\":\"xtls-rprx-vision\"', '\"flow\":\"\"') WHERE config LIKE '%xtls-rprx-vision%';"
+    echo "  ✔ vision removed from stored clients (re-import links in your client app)"
 fi
 
 # ---------------------------------------------------------------------
@@ -155,9 +172,9 @@ S_UI_PID=$!
 sleep 4
 
 echo "▶️  Pre-flight checks..."
-curl -s -o /dev/null -w "  panel (s-ui)     http://127.0.0.1:2095/app/ -> HTTP %{http_code}\n" http://127.0.0.1:2095/app/ || echo "  panel not ready yet"
+curl -s -o /dev/null -w "  panel (s-ui)     http://127.0.0.1:2095/gucci/ -> HTTP %{http_code}\n" http://127.0.0.1:2095/gucci/ || echo "  panel not ready yet"
 curl -s -k -o /dev/null -w "  sub server       https://127.0.0.1:443/sub/x -> HTTP %{http_code}\n" "https://127.0.0.1:443/sub/x" || echo "  sub server not ready yet"
-echo "  raw TCP inbound  : create it in the panel on port $TCP_INBOUND_PORT (TCP Proxy target)"
+echo "  raw TCP inbound  : optional port $TCP_INBOUND_PORT (default design: domain:443 only, no TCP Proxy)"
 
 echo "▶️  Starting nginx in foreground on port 1..."
 nginx -t
