@@ -1,1 +1,0 @@
-{"query":"mutation { serviceCreate(input: { name: \"GUCCI-NODE2\", projectId: \"c7677701-f8e5-4252-974e-d36d07dfd38a\", environmentId: \"61e165e3-8a23-4fdc-9a88-841701bc695a\", source: { repo: \"VelvetMatrix20/GUCCI\", branch: \"main\" }, variables: { REALITY_SEED: \"gucci-node2-v1\" } }) { id name } }"}
